@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Mis cuentas · Local</title><link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<aside class="sidebar">
+  <div class="brand"><span class="brand-icon">m.</span><div>Mis cuentas<small>Todo en su sitio.</small></div></div>
+  <div class="side-label">ESPACIOS</div>
+  <div id="areas"></div>
+  <div class="side-label">HERRAMIENTAS</div>
+  <nav id="navigation"></nav>
+  <div class="sidebar-bottom"><span class="status-dot"></span> Solo en este ordenador<small>Academia · Baile · Personal</small></div>
+</aside>
+<div class="shell">
+  <header class="topbar"><span id="breadcrumb">Vista conjunta / Resumen</span><div class="top-controls">
+    <label class="sr-only" for="mode">Base de datos</label><select id="mode"><option value="real">Mis datos</option><option value="demo">Explorar ejemplo</option></select>
+    <label class="sr-only" for="month">Mes</label><input type="month" id="month">
+    <button class="button primary" id="new-tx">＋ Actividad</button>
+  </div></header>
+  <div id="demo-banner" class="demo-banner" hidden>ESTÁS EN EL EJEMPLO · Datos y porcentajes ficticios. Tus cuentas reales están separadas.</div>
+  <main id="content"><div class="empty">Cargando tus cuentas…</div></main>
+  <footer>Mis cuentas local · v0.2 · Actividad, reparto y banco en euros</footer>
+</div>
+<div id="toast" role="status" hidden></div>
+<dialog id="modal"><div id="modal-content"></div></dialog>
+<script type="module" src="/app.js"></script>
+</body></html>
