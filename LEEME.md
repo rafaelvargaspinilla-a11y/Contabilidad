@@ -1,6 +1,6 @@
 # Mis cuentas local · v0.2
 
-**También hay una versión para navegador, móvil y ordenador, con datos separados por dispositivo.** Consulta [README.md](README.md) para abrirla, publicarla en GitHub Pages y trasladar cuentas mediante respaldos. Las instrucciones siguientes corresponden a la versión Python original para escritorio.
+**También hay una versión para navegador, móvil y ordenador: modo local o cuentas compartidas mediante Supabase.** Consulta [README.md](README.md) para abrirla, publicarla en GitHub Pages y trasladar cuentas mediante respaldos. Las instrucciones siguientes corresponden a la versión Python original para escritorio.
 
 Academia, Baile y Personal en una aplicación local. Esta versión añade asignaturas por mes y cuatrimestre, retenciones, reparto por registro y conciliación con el banco. No contiene conexión bancaria, publicidad, analítica ni recursos remotos. Los extractos se procesan en el ordenador donde ejecutas la app. La IA es opcional y llama exclusivamente a tu Ollama en `127.0.0.1:11434`.
 

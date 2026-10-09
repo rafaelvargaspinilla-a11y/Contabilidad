@@ -17,6 +17,14 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - '127.0.0.1:55432:5432'
+        options: --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -30,18 +38,30 @@ jobs:
       - name: Pruebas de importación
         run: node --test tests/test_import.mjs
       - name: Construir la versión de navegador
-        run: python3 scripts/build_pages.py
+        run: python3 scripts/build_pages.py --local
       - name: Preparar las pruebas de navegador
         run: |
           python3 -m pip install -r requirements-dev.txt
           python3 -m playwright install --with-deps chromium
       - name: Probar móvil, respaldos y uso sin conexión
         run: python3 tests/browser_smoke.py
+      - name: Probar PostgreSQL, permisos y acceso compartido
+        env:
+          PYTHONPATH: .
+        run: |
+          python3 tests/supabase_sql.py
+          python3 tests/supabase_browser.py
+      - name: Construir con la configuración pública de Supabase
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+        run: python3 scripts/build_pages.py
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
   deploy:
     needs: build
+    if: ${{ vars.SUPABASE_URL != '' && vars.SUPABASE_PUBLISHABLE_KEY != '' }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages

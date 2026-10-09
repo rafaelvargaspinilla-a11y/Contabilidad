@@ -10,14 +10,16 @@ const number = n => ((n||0)/100).toFixed(2);
 const AREAS = {all:'Vista conjunta',academia:'Academia',baile:'Baile',personal:'Personal'};
 const KINDS = {income:'Ingreso',expense:'Gasto / devolución',distribution:'Reparto de resultado',transfer:'Traspaso',funding:'Aportación',reimbursement:'Reembolso',remuneration:'Retribución'};
 const today = new Date();
+const cloudMode = browserMode && globalThis.misCuentasBrowser.cloud;
 const localDay = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-const modeKey = browserMode ? 'miscuentas-mode:' + new URL('.', import.meta.url).pathname : 'miscuentas-mode';
+const modeKey = browserMode ? 'miscuentas-mode:' + new URL('.', import.meta.url).pathname + (cloudMode ? ':' + globalThis.misCuentasBrowser.accountId : '') : 'miscuentas-mode';
 const U = {area:'all',page:'summary',mode:localStorage.getItem(modeKey)||'real',month:localDay(today).slice(0,7),data:null,csrf:'',selected:new Set(),csv:null,preview:null};
 const pages = {summary:'Resumen',activity:'Actividad',courses:'Asignaturas',transactions:'Banco',import:'Importar extracto',settlements:'Liquidaciones',settings:'Configuración',ai:'Asistente local'};
 if(browserMode) delete pages.ai;
 const B=businessUI({U,$,$$,esc,euro,number,field,button,head,stat,areaOptions,accountOptions,categoryOptions,opts,openDialog,api,load,render,toast});
 
 async function api(path,p){
+  if(cloudMode && U.mode==='real' && p && globalThis.misCuentasBrowser.sync.offline) throw new Error('Sin conexión: solo puedes consultar tus cuentas.');
   if(browserMode) return globalThis.misCuentasBrowser.request(path,p ? {...p,mode:U.mode} : null);
   const options = p ? {method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':U.csrf},body:JSON.stringify({...p,mode:U.mode})} : {};
   const r=await fetch(path,options); const data=await r.json();
@@ -65,6 +67,11 @@ function render(){
  const views={summary:B.summary,activity:B.activity,courses:B.courses,settlements:B.settlements,transactions:renderTransactions,import:renderImport,settings:renderSettings,ai:renderAI};
  $('#content').innerHTML=views[U.page]();
  bindContent();B.bind();
+ if(cloudMode && U.mode==='real' && globalThis.misCuentasBrowser.sync.offline){
+  $('#new-tx').disabled=true;
+  const allowed=new Set(['backup','export','export-activity','daily-backup','before-restore','failed-change','refresh','demo','close-modal','goto-activity','goto-settlements']);
+  $$('[data-action]').filter(b=>!allowed.has(b.dataset.action)).forEach(b=>b.disabled=true);
+ }else $('#new-tx').disabled=false;
 }
 
 function renderTransactions(){
@@ -83,7 +90,7 @@ function renderSettings(){
  return head('Una estructura que se adapta a ti.','Configura cuentas, categorías y reglas. Puedes registrar todos los gastos de socios y profesores.',button('Nueva cuenta','new-account')+button('Nueva categoría','new-category','primary'))+
  `<div class="account-grid">${accounts.map(a=>`<div class="panel"><div class="area-label">${badge(a.area)}${esc(a.name)}</div><div class="account-balance">${euro(balance(a))}</div><div class="sub">${AREAS[a.area]} · saldo a cierre de mes<br>Saldo inicial: ${euro(a.opening)} · ${a.opening_date}</div><div style="margin-top:12px">${button('Configurar','edit-account','compact',`data-id="${a.id}"`)}</div></div>`).join('')}</div>`+
  `<div class="tools-grid"><div class="panel"><div class="panel-head"><div><h2>Categorías</h2><div class="sub">Separadas por área y por ingreso/gasto.</div></div></div>${['academia','baile','personal'].filter(a=>U.area==='all'||a===U.area).map(a=>`<details ${U.area===a?'open':''}><summary>${AREAS[a]} · ${U.data.categories.filter(c=>c.area===a).length} categorías</summary><table><tbody>${U.data.categories.filter(c=>c.area===a).map(c=>`<tr><td>${esc(c.name)}</td><td class="num"><span class="pill">${c.kind==='income'?'Ingreso':'Gasto'}</span></td></tr>`).join('')}</tbody></table></details>`).join('')}</div><div class="panel"><div class="panel-head"><div><h2>Reglas de importación</h2><div class="sub">Se aplican a nuevos CSV del área elegida.</div></div>${button('Nueva','new-rule','compact')}</div>${U.data.rules.length?`<table><tbody>${U.data.rules.map(r=>`<tr><td>Contiene <strong>${esc(r.term)}</strong><div class="sub">${AREAS[r.area]} → ${esc(r.category)}</div></td><td>${button('Eliminar','delete-rule','quiet compact',`data-id="${r.id}"`)}</td></tr>`).join('')}</tbody></table>`:'<p>Crea reglas para comercios habituales. Si hay varias coincidencias, se usa la que contiene el texto más específico.</p>'}</div></div>`+
- `<div class="panel"><div class="panel-head"><div><h2>Tus datos y tus copias</h2><div class="sub">Se guardan al confirmar cada operación. Hay una copia diaria al iniciar.</div></div><div class="action-row">${button('Descargar respaldo','backup')}${button('Exportar movimientos','export')}</div></div><div class="mono">${esc(U.data.data_path)}</div><p class="small">${browserMode ? 'Este navegador guarda tus cuentas; no se sincronizan con otros dispositivos. Borrar los datos del sitio o usar el modo privado puede hacer que las pierdas. Descarga un respaldo y guárdalo en un lugar seguro.' : 'El respaldo contiene todas las cuentas, reglas, porcentajes e historial. La guía LEEME explica cómo restaurarlo. Los archivos locales no están cifrados por la app; utiliza el cifrado del disco y de tus copias.'}</p>${browserMode ? `<div class="action-row">${button('Descargar copia automática','daily-backup')}${button('Copia anterior a restaurar','before-restore')}</div><div class="field restore-field"><label for="restore-file">Restaurar un respaldo en ${U.mode==='real'?'Mis datos':'el ejemplo'}</label><input id="restore-file" type="file" accept=".sqlite3,.sqlite,.db"><small>Sustituye las cuentas de este dispositivo. Se conserva una copia previa; no se mezclan las bases.</small></div>${button('Restaurar respaldo','restore','danger')}` : ''}</div>`;
+ `<div class="panel"><div class="panel-head"><div><h2>Tus datos y tus copias</h2><div class="sub">${cloudMode&&U.mode==='real'?'Se guardan al confirmar cada operación. Se conserva una copia previa diaria en la nube.':'Se guardan al confirmar cada operación. Hay una copia diaria al iniciar.'}</div></div><div class="action-row">${button('Descargar respaldo','backup')}${button('Exportar movimientos','export')}</div></div><div class="mono">${esc(U.data.data_path)}</div><p class="small">${cloudMode && U.mode==='real' ? 'Tus cuentas se guardan en Supabase y se comparten con tus dispositivos. Conserva respaldos descargados. Restaurar sustituye la base compartida de todos ellos.' : browserMode ? 'Este navegador guarda tus cuentas; no se sincronizan con otros dispositivos. Borrar los datos del sitio o usar el modo privado puede hacer que las pierdas. Descarga un respaldo y guárdalo en un lugar seguro.' : 'El respaldo contiene todas las cuentas, reglas, porcentajes e historial. La guía LEEME explica cómo restaurarlo. Los archivos locales no están cifrados por la app; utiliza el cifrado del disco y de tus copias.'}</p>${browserMode ? `<div class="action-row">${button('Descargar copia automática','daily-backup')}${button('Copia anterior a restaurar','before-restore')}${cloudMode&&U.mode==='real'?button('Descargar operación no confirmada','failed-change'):''}</div><div class="field restore-field"><label for="restore-file">Restaurar un respaldo en ${U.mode==='real'?'Mis datos':'el ejemplo'}</label><input id="restore-file" type="file" accept=".sqlite3,.sqlite,.db"><small>${cloudMode&&U.mode==='real'?'Sustituye las cuentas compartidas de todos tus dispositivos.':'Sustituye las cuentas de este dispositivo.'} Se conserva una copia previa; no se mezclan las bases.</small></div>${button('Restaurar respaldo','restore','danger')}` : ''}</div>`;
 }
 
 function defaultImportActivity(r){
@@ -204,11 +211,12 @@ document.addEventListener('click',async e=>{
   if(act==='goto-import'){U.page='import';render();return;}
   if(act==='goto-transactions'){U.page='transactions';render();return;}
   if(act==='demo'){U.mode='demo';U.csv=null;U.preview=null;localStorage.setItem(modeKey,'demo');await load();return;}
-  if(['backup','export','daily-backup','before-restore'].includes(act)){await downloadFile(`/api/${act}?mode=${U.mode}`);return;}
+  if(act==='refresh'){b.disabled=true;try{await load();toast('Datos actualizados');}finally{b.disabled=false;}return;}
+  if(['backup','export','daily-backup','before-restore','failed-change'].includes(act)){await downloadFile(`/api/${act}?mode=${U.mode}`);return;}
   if(act==='restore'&&browserMode){
    const file=$('#restore-file')?.files[0];
    if(!file)throw new Error('Elige primero un archivo de respaldo.');
-   if(!confirm(`Se sustituirán ${U.mode==='real'?'tus cuentas':'los datos de ejemplo'} de este navegador por el respaldo. ¿Continuar?`))return;
+   if(!confirm(cloudMode&&U.mode==='real'?'Se sustituirán las cuentas compartidas de todos tus dispositivos por este respaldo. Se conservará una copia previa. ¿Continuar?':`Se sustituirán ${U.mode==='real'?'tus cuentas':'los datos de ejemplo'} de este navegador por el respaldo. ¿Continuar?`))return;
    b.disabled=true;
    try{await globalThis.misCuentasBrowser.restore(file,U.mode);U.selected.clear();U.csv=null;U.preview=null;await load();toast('Respaldo restaurado');}
    finally{b.disabled=false;}
@@ -298,4 +306,10 @@ $('#new-tx').addEventListener('click',()=>B.entryDialog());
 $('#mode').addEventListener('change',async e=>{U.mode=e.target.value;localStorage.setItem(modeKey,U.mode);U.csv=null;U.preview=null;U.selected.clear();try{await load();}catch(err){reportError(err);}});
 $('#month').addEventListener('change',async e=>{if(!/^\d{4}-\d{2}$/.test(e.target.value))return;U.month=e.target.value;U.selected.clear();try{await load();}catch(err){reportError(err);}});
 async function init(){try{const session=await api('/api/session');U.csrf=session.csrf;await load();}catch(err){$('#content').textContent=err.message;}}
+if(cloudMode){
+ const refresh=async()=>{if(document.hidden||$('#modal').open||U.csv||U.selected.size)return;try{await load();}catch(err){reportError(err);}};
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});
+ window.addEventListener('online',refresh);
+ window.addEventListener('offline',refresh);
+}
 init();

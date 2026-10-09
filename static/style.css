@@ -7,6 +7,8 @@
 /* Controles táctiles y copias en la versión de navegador. */
 .device-notice{padding:12px 36px;background:#eaf3ef;color:#426958;font-size:12px;line-height:1.5}
 .restore-field{margin:24px 0 14px}
+.auth-screen{max-width:500px;padding:30px 16px;margin:8vh auto}
+.auth-screen .panel{overflow:visible}
 @media(max-width:760px){
  .button,.side-button,.close{min-height:44px}
  .close{min-width:44px}

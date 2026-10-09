@@ -3,6 +3,8 @@
 import argparse
 import hashlib
 import json
+import os
+import base64
 import shutil
 import urllib.request
 from pathlib import Path
@@ -19,9 +21,32 @@ RUNTIME = {
 }
 ASSETS = ('app.js', 'style.css', 'business-ui.mjs', 'import-utils.mjs', 'transport.mjs',
           'browser-entry.mjs', 'browser-worker.js', 'manifest.webmanifest', 'icon.svg')
+ASSETS += ('supabase-auth.mjs', 'supabase-rest.js')
 
 
-def build(output, cache):
+def cloud_config(local=False):
+    url = '' if local else os.environ.get('SUPABASE_URL', '').strip().rstrip('/')
+    key = '' if local else os.environ.get('SUPABASE_PUBLISHABLE_KEY', '').strip()
+    if not url and not key:
+        return {'enabled': False}
+    from urllib.parse import urlsplit
+    parsed = urlsplit(url)
+    if not key or parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password or parsed.path or parsed.query or parsed.fragment:
+        raise ValueError('Configura SUPABASE_URL (HTTPS) y SUPABASE_PUBLISHABLE_KEY conjuntamente.')
+    public = key.startswith('sb_publishable_')
+    if key.count('.') == 2:
+        try:
+            claims = json.loads(base64.urlsafe_b64decode(key.split('.')[1] + '==='))
+            public = claims.get('role') == 'anon'
+        except (ValueError, TypeError):
+            public = False
+    if not public:
+        raise ValueError('Solo se admite una clave publicable o anon; nunca una clave administrativa.')
+    return {'enabled': True, 'url': url, 'publishableKey': key}
+
+
+def build(output, cache, local=False):
+    config = cloud_config(local)
     output, cache = output.resolve(), cache.resolve()
     if output == ROOT or ROOT.is_relative_to(output) or output == cache or cache.is_relative_to(output):
         raise ValueError('El directorio de salida no puede contener el proyecto ni la caché.')
@@ -46,13 +71,14 @@ def build(output, cache):
     for name in ASSETS:
         shutil.copyfile(ROOT / 'static' / name, output / name)
     (output / 'python').mkdir()
-    for name in ('core.py', 'finance.py', 'browser_api.py'):
+    for name in ('core.py', 'finance.py', 'browser_api.py', 'cloud_bridge.py'):
         shutil.copyfile(ROOT / name, output / 'python' / name)
     html = (ROOT / 'static' / 'index.html').read_text()
     html = html.replace('href="/style.css"', 'href="./style.css"')
     html = html.replace('src="/app.js"', 'src="./browser-entry.mjs"')
     html = html.replace('<title>Mis cuentas · Local</title>', '<title>Mis cuentas</title><meta name="theme-color" content="#142b31"><link rel="manifest" href="./manifest.webmanifest"><link rel="icon" href="./icon.svg">')
     (output / 'index.html').write_text(html)
+    (output / 'cloud-config.json').write_text(json.dumps(config))
     (output / '.nojekyll').touch()
     files = sorted(p.relative_to(output).as_posix() for p in output.rglob('*') if p.is_file() and not p.name.startswith('.'))
     digest = hashlib.sha256()
@@ -61,7 +87,7 @@ def build(output, cache):
         digest.update((output / name).read_bytes())
     version = digest.hexdigest()[:16]
     urls = ['./'] + ['./' + name for name in files]
-    worker = """// Caché del programa; los datos contables permanecen en IndexedDB.
+    worker = """// Caché del programa: nunca tokens ni respuestas privadas de Supabase.
 const PREFIX = 'mis-cuentas:' + new URL('.', self.location.href).pathname + ':';
 const CACHE = PREFIX + 'VERSION';
 const FILES = FILE_LIST;
@@ -86,5 +112,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--output', type=Path, default=ROOT / 'site')
     parser.add_argument('--runtime-cache', type=Path, default=ROOT / '.runtime-cache')
+    parser.add_argument('--local', action='store_true', help='Construir sin Supabase para pruebas o uso local.')
     args = parser.parse_args()
-    build(args.output, args.runtime_cache)
+    build(args.output, args.runtime_cache, args.local)
