@@ -137,12 +137,14 @@ class SupabaseBrowserTests(unittest.TestCase):
     def test_budget_syncs_to_second_device(self):
         desktop = self.page()
         self.add_income(desktop)
+        self.request(desktop, '/api/entry', {'mode':'real','area':'academia','kind':'expense','period':'2026-09','date':'2026-09-10','gross_value':'100','description':'Gasto de actividad','method':'shared','my_percent':'17'})
+        self.request(desktop, '/api/entry', {'mode':'real','area':'personal','kind':'expense','period':'2026-09','date':'2026-09-10','gross_value':'999','description':'Gasto personal'})
         categories = self.state(desktop)['categories']
         category = next(c['id'] for c in categories if c['area']=='personal' and c['kind']=='expense')
         self.request(desktop, '/api/budget', {'mode':'real', 'month':'2026-10', 'allocations':[{'category_id':category, 'percent':'100'}]})
         mobile = self.page(390)
         budget = self.request(mobile, '/api/state?mode=real&month=2026-10')['budget']['saved']
-        self.assertEqual(budget['amount'], 12345)
+        self.assertEqual(budget['amount'], 10645)
         self.assertEqual(budget['allocations'][0]['bps'], 10000)
 
     def test_same_accounts_on_phone_and_computer_and_separate_user(self):

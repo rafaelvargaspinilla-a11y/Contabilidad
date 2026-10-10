@@ -105,8 +105,18 @@ class FinanceStore(Store):
             received += sum(r['amount'] for r in self.rows("SELECT amount FROM external_cash WHERE entry_id=? AND substr(date,1,7)=?", (e['id'], source)))
             if values['expected']:
                 total += int((Decimal(received)*Decimal(values['my_income']-values['withholding'])/values['expected']).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
+        expenses = sum(entry_values(e)['my_expense'] for e in self.rows(
+            "SELECT * FROM entries WHERE active=1 AND review=0 AND kind='expense' AND area IN ('academia','baile') AND period=?", (source,)))
         row = self.db.execute('SELECT value FROM preferences WHERE key=?', ('budget:'+month,)).fetchone()
-        return dict(source=source, received=total, saved=json.loads(row['value']) if row else None)
+        saved = json.loads(row['value']) if row else None
+        legacy = bool(saved and saved.get('basis_version') != 2)
+        if legacy:
+            # Preserve the original income and percentages; apply the corrected cost basis.
+            saved = dict(saved, income=saved['amount'], business_expenses=expenses,
+                         amount=max(0, saved['amount']-expenses), basis_version=2)
+        return dict(source=source, received=total, business_expenses=expenses,
+                    available=max(0, total-expenses), deficit=max(0, expenses-total),
+                    saved=saved, legacy_adjusted=legacy)
 
     def save_budget(self, p):
         period = month(p.get('month', ''))
@@ -123,8 +133,10 @@ class FinanceStore(Store):
             raise ValueError('No repitas categorías ni superes el 100 %.')
         state = self.budget_state(period)
         saved = state['saved']
-        amount = saved['amount'] if saved else state['received']
-        budget = dict(amount=amount, source=state['source'], allocations=allocations)
+        amount = saved['amount'] if saved else state['available']
+        budget = dict(amount=amount, source=state['source'], allocations=allocations, basis_version=2,
+                      income=saved['income'] if saved else state['received'],
+                      business_expenses=saved['business_expenses'] if saved else state['business_expenses'])
         with self.db:
             self.db.execute('INSERT OR REPLACE INTO preferences(key,value) VALUES (?,?)', ('budget:'+period,json.dumps(budget)))
             self.log('budget', dict(month=period, **budget))
@@ -186,13 +198,13 @@ class FinanceStore(Store):
             raise ValueError('La retención de esta versión se registra en ingresos íntegramente tuyos; debe ser inferior al 100 %.')
         withheld = proportion(gross,tax)
         cat = p.get('category_id') or None
+        category = None
         if cat:
             category = self.db.execute('SELECT * FROM categories WHERE id=?',(cat,)).fetchone()
             if not category or category['area']!=area or category['kind']!=kind:
                 raise ValueError('La categoría no corresponde al área y tipo.')
-        description = clean(p.get('description'),200) or (course['name']+' · '+period if course else '')
-        if not description:
-            raise ValueError('Escribe el concepto.')
+        description = clean(p.get('description'),200) or (course['name']+' · '+period if course else
+            category['name'] if category else ('Ingreso' if kind=='income' else 'Devolución' if refund else 'Gasto')+' de '+{'academia':'Academia','baile':'Baile','personal':'Personal'}[area])
         holder = p.get('holder','me')
         if holder not in ('me','partner') or (area=='personal' and holder!='me'):
             raise ValueError('Selecciona quién cobra o paga.')

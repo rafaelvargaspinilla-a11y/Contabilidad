@@ -12,9 +12,9 @@ export function budgetUI({U,$,$$,esc,euro,head,button,api,load,toast}){
   if(key!==nextKey){draft=null;key=nextKey;}
   const rows=b.saved?.allocations.map(r=>({category_id:r.category_id,percent:r.bps/100}))||[];
   if(!draft)draft=rows;
-  const amount=b.saved?.amount??b.received;
-  return head('Tu presupuesto del mes.','Distribuye lo recibido el mes anterior, sin restar gastos. El presupuesto siempre es Personal.')+
-   `<div class="panel"><h2>Dinero disponible: ${euro(amount)}</h2><p>Tu parte de los ingresos cobrados en ${esc(b.source)}, después de retenciones y sin descontar gastos. No se suman otra vez los traspasos a Personal.</p>${b.saved?'<p>La cantidad de partida queda guardada; editar los porcentajes no cambia esa cantidad.</p>':''}<form id="budget-form"><div id="budget-rows"></div><div class="action-row">${button('Añadir categoría','budget-add')}${button('Crear categoría personal','budget-category')}</div><p id="budget-total" aria-live="polite"></p><div class="error"></div><button type="submit" class="button primary">Guardar presupuesto</button></form></div>`+
+  const amount=b.saved?.amount??b.available;
+  return head('Tu presupuesto del mes.','Distribuye los beneficios del mes anterior. Los gastos personales se comparan después con tu presupuesto.')+
+   `<div class="panel"><h2>Dinero disponible: ${euro(amount)}</h2><p>Base de ${esc(b.source)}: tus ingresos cobrados después de retenciones (${euro(b.saved?.income??b.received)}) menos tu parte de los gastos de Academia y Baile (${euro(b.saved?.business_expenses??b.business_expenses)}). No se descuentan los gastos de Personal ni se duplican traspasos.</p>${b.legacy_adjusted?'<p class="inline-note">Este presupuesto se creó antes de descontar los gastos de actividad. Hemos ajustado la base manteniendo los porcentajes. Pulsa Guardar presupuesto para fijar la cantidad corregida.</p>':''}${!b.saved&&b.deficit?`<p class="inline-note">Los gastos de actividad superan tus ingresos en ${euro(b.deficit)}. No hay beneficio disponible para repartir.</p>`:''}${b.saved?'<p>La cantidad de partida queda guardada; editar los porcentajes no cambia esa cantidad.</p>':''}<form id="budget-form"><div id="budget-rows"></div><div class="action-row">${button('Añadir categoría','budget-add')}${button('Crear categoría personal','budget-category')}</div><p id="budget-total" aria-live="polite"></p><div class="error"></div><button type="submit" class="button primary">Guardar presupuesto</button></form></div>`+
    (b.saved?`<div class="panel"><h2>Presupuesto frente a gasto real</h2><div class="table-wrap"><table><thead><tr><th>CATEGORÍA</th><th>PRESUPUESTO</th><th>GASTO REAL</th><th>DISPONIBLE / EXCESO</th></tr></thead><tbody>${b.saved.allocations.map((r,i)=>{const planned=allocated(amount,b.saved.allocations)[i],spent=actual(r.category_id);return `<tr><td>${esc(categories().find(c=>c.id===r.category_id)?.name||'Categoría')}</td><td>${euro(planned)}</td><td>${euro(spent)}</td><td>${planned-spent<0?'Exceso: ':''}${euro(Math.abs(planned-spent))}</td></tr>`;}).join('')}</tbody></table></div><p>Gastos personales del mes de actividad seleccionado, incluidas devoluciones. Los gastos de categorías sin presupuesto suman ${euro(U.data.finance.entries.filter(e=>e.area==='personal'&&e.period===U.month&&e.kind==='expense'&&!e.review&&!b.saved.allocations.some(r=>r.category_id===e.category_id)).reduce((s,e)=>s+e.my_expense,0))}.</p></div>`:'');
  }
  function draw(){
@@ -22,7 +22,7 @@ export function budgetUI({U,$,$$,esc,euro,head,button,api,load,toast}){
   totals();
  }
  function totals(){
-  const amount=U.data.budget.saved?.amount??U.data.budget.received;
+  const amount=U.data.budget.saved?.amount??U.data.budget.available;
   const bps=draft.reduce((s,r)=>s+Math.round(Number(r.percent||0)*100),0);
   const amounts=allocated(amount,draft.map(r=>({bps:Math.round(Number(r.percent||0)*100)})));
   draft.forEach((r,i)=>{$(`[data-budget-amount="${i}"]`).textContent=euro(amounts[i]);});

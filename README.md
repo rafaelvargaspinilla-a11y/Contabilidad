@@ -60,8 +60,14 @@ Los CSV de `ejemplos/` son ficticios. No subas extractos reales, bases SQLite, r
 
 ### Presupuesto mensual
 
-En **Presupuesto**, elige el mes que vas a presupuestar. La base es tu parte de los ingresos cobrados el mes anterior, después de retenciones, sin restar gastos de actividad ni personales. Los cobros pendientes y los traspasos internos no se suman. Los registros antiguos pendientes de revisar su reparto tampoco se incluyen hasta confirmarlos en Actividad.
+En **Presupuesto**, elige el mes que vas a presupuestar. La base es tu parte de los ingresos cobrados el mes anterior, después de retenciones, menos tu parte de los gastos de Academia y Baile del mes de actividad anterior (incluidas devoluciones). No se descuentan los gastos de Personal. Si el beneficio es negativo, el importe disponible es cero y se muestra el déficit. Los cobros pendientes y los traspasos internos no se suman. Los registros antiguos pendientes de revisar su reparto tampoco se incluyen hasta confirmarlos en Actividad.
 
-Añade categorías de gasto Personal (o crea otras), reparte sus porcentajes y pulsa **Guardar presupuesto**. Puedes dejar dinero sin asignar, pero no superar el 100 % ni repetir categorías. La cantidad inicial queda fijada al primer guardado; después puedes editar los porcentajes. La tabla compara el presupuesto guardado con los gastos personales del mes de actividad y muestra disponible o exceso. Las categorías sin presupuesto se indican aparte.
+Añade categorías de gasto Personal (o crea otras), reparte sus porcentajes y pulsa **Guardar presupuesto**. Puedes dejar dinero sin asignar, pero no superar el 100 % ni repetir categorías. La cantidad inicial queda fijada al primer guardado; después puedes editar los porcentajes. Los presupuestos creados con la fórmula anterior mantienen sus porcentajes e ingresos de partida y muestran la base corregida al descontar gastos de actividad; pulsa Guardar presupuesto para fijar esa corrección. La tabla compara el presupuesto guardado con los gastos personales del mes de actividad y muestra disponible o exceso. Las categorías sin presupuesto se indican aparte.
 
 El presupuesto se comparte mediante Supabase y se incluye en los respaldos existentes. Esta actualización no requiere ejecutar otro SQL. Banco y Liquidaciones se han ocultado, junto con los saldos bancarios y pendientes del resumen; los registros históricos se conservan.
+
+### Nueva actividad simplificada
+
+Elige área, tipo, mes, fecha, categoría o asignatura e importe. El concepto es opcional: se utiliza la asignatura, la categoría o un nombre según área y tipo si lo dejas vacío. Las actividades nuevas se registran como cobradas/pagadas y usan automáticamente la primera cuenta del área.
+
+El reparto automático es Personal al 100 %, Academia según la asignatura (o el porcentaje configurado para gastos), y Baile compartido al 50 %. **Ajustar porcentajes (opcional)** permite cambiar reparto, porcentajes y retención cuando haga falta. Editar una actividad antigua conserva su pagador, porcentajes y cobros existentes; no la marca de nuevo como cobrada ni duplica movimientos.

@@ -96,6 +96,49 @@ class BrowserTests(unittest.TestCase):
         self.assertEqual(self.request(page, '/api/state?mode=real&month=2026-10')['budget']['saved']['amount'], 100000)
         self.assertFalse(page.evaluate('document.documentElement.scrollWidth > innerWidth'))
 
+    def test_simple_activity_form_defaults_and_summary(self):
+        page = self.page(390)
+        page.locator('#month').select_option('2026-09')
+        page.locator('#new-tx').click()
+        self.assertEqual(page.locator('dialog [name="holder"],dialog [name="cash_status"],dialog [name="account_id"]').count(), 0)
+        self.assertFalse(page.locator('#act-method').is_visible())
+        self.assertFalse(page.locator('dialog [name="description"]').evaluate('(el)=>el.required'))
+        page.locator('#act-area').select_option('baile')
+        page.locator('#act-kind').select_option('income')
+        page.locator('#act-gross').fill('100')
+        page.locator('dialog button[type="submit"]').click()
+        page.wait_for_function('!document.querySelector("dialog").open')
+        entry = self.state(page)['finance']['entries'][0]
+        self.assertEqual((entry['description'],entry['my_bps'],entry['paid'],entry['pending']), ('Ingreso de Baile',5000,10000,0))
+        self.assertEqual(self.state(page)['transactions'][0]['account_id'], 'baile')
+        page.locator('[data-area="personal"]').click()
+        self.assertEqual(page.get_by_role('heading', name='El detalle del mes').count(),0)
+        page.locator('[data-area="all"]').click()
+        self.assertEqual(page.get_by_role('heading', name='El detalle del mes').count(),1)
+        self.assertEqual(page.locator('#content [data-action="export-activity"],#content [data-action="backup"]').count(),0)
+        self.assertFalse(page.evaluate('document.documentElement.scrollWidth > innerWidth'))
+
+    def test_external_course_is_selected_without_manual_method(self):
+        page = self.page()
+        course = self.request(page, '/api/course', {'mode':'real','name':'Externa','year':2026,'semester':1,'ownership':'external','teacher_percent':'60'})['result']
+        page.locator('#month').select_option('2026-09')
+        page.locator('#new-tx').click()
+        page.locator('#act-area').select_option('academia')
+        page.locator('#act-kind').select_option('income')
+        page.locator('#act-course').select_option(course)
+        page.locator('#act-gross').fill('1000')
+        page.locator('dialog button[type="submit"]').click()
+        page.wait_for_function('!document.querySelector("dialog").open')
+        entry = self.state(page)['finance']['entries'][0]
+        self.assertEqual((entry['method'],entry['teacher_bps'],entry['my_income'],entry['paid']), ('external',6000,6800,100000))
+        page.locator('[data-page="activity"]').click()
+        page.locator('[data-action="edit-entry"]').click()
+        page.locator('dialog [name="description"]').fill('Nombre corregido')
+        page.locator('dialog button[type="submit"]').click()
+        page.wait_for_function('!document.querySelector("dialog").open')
+        entry = self.state(page)['finance']['entries'][0]
+        self.assertEqual((entry['teacher_bps'],entry['my_income'],entry['paid']), (6000,6800,100000))
+
     def test_mobile_navigation_form_and_layout(self):
         page = self.page(390)
         for width in (320, 390, 768, 1280):
@@ -141,6 +184,7 @@ class BrowserTests(unittest.TestCase):
         desktop, mobile = self.page(), self.page(390)
         self.add_income(desktop)
         self.assertEqual(self.state(mobile)['transactions'], [])
+        desktop.locator('[data-page="settings"]').click()
         with desktop.expect_download() as download:
             desktop.locator('[data-action="backup"]').click()
         path = download.value.path()

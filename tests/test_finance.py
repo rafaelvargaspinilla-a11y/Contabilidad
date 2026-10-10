@@ -248,20 +248,54 @@ class FinanceTests(unittest.TestCase):
         self.s.import_rows(dict(name='ISO',rows=rows))
         self.assertTrue(self.s.preview_csv(p)['rows'][0]['duplicate'])
 
-    def test_budget_received_not_profit_or_transfers_and_locked_base(self):
+    def test_budget_profit_excludes_personal_expenses_and_locks_base(self):
         self.activity(cash_status='paid', account_id='academia', tax_percent='15')
         self.activity(kind='expense', gross_value='200', cash_status='paid', account_id='academia')
+        self.activity(area='baile', kind='expense', method='shared', gross_value='100', my_percent='50')
+        self.activity(area='personal', kind='expense', gross_value='600')
         self.activity(gross_value='500')  # Pending is not received.
         category = self.s.rows("SELECT id FROM categories WHERE area='personal' AND kind='expense'")[0]['id']
         self.assertEqual(self.s.state('2026-10')['budget']['received'], 85000)
+        self.assertEqual(self.s.state('2026-10')['budget']['business_expenses'], 8400)
+        self.assertEqual(self.s.state('2026-10')['budget']['available'], 76600)
         self.s.save_budget(dict(month='2026-10', allocations=[dict(category_id=category, percent='60')]))
         self.activity(gross_value='100', cash_status='paid', account_id='academia', tax_percent='0')
         self.s.save_budget(dict(month='2026-10', allocations=[dict(category_id=category, percent='100')]))
-        self.assertEqual(self.s.state('2026-10')['budget']['saved']['amount'], 85000)
+        self.assertEqual(self.s.state('2026-10')['budget']['saved']['amount'], 76600)
         self.assertEqual(self.s.state('2026-10')['budget']['received'], 95000)
         self.s.close()
         self.s = FinanceStore(self.path)
         self.assertEqual(self.s.state('2026-10')['budget']['saved']['allocations'][0]['bps'], 10000)
+
+    def test_budget_legacy_basis_corrected_and_frozen_on_save(self):
+        import json
+        self.activity(kind='expense', gross_value='200', method='individual')
+        category = self.s.rows("SELECT id FROM categories WHERE area='personal' AND kind='expense'")[0]['id']
+        old = dict(amount=100000, source='2026-09', allocations=[dict(category_id=category, bps=10000)])
+        with self.s.db:
+            self.s.db.execute('INSERT INTO preferences VALUES (?,?)', ('budget:2026-10', json.dumps(old)))
+        state = self.s.state('2026-10')['budget']
+        self.assertTrue(state['legacy_adjusted'])
+        self.assertEqual(state['saved']['amount'], 80000)
+        self.s.save_budget(dict(month='2026-10', allocations=[dict(category_id=category, percent='100')]))
+        self.activity(kind='expense', gross_value='100', method='individual')
+        state = self.s.state('2026-10')['budget']
+        self.assertFalse(state['legacy_adjusted'])
+        self.assertEqual(state['saved']['amount'], 80000)
+
+    def test_budget_refunds_and_negative_profit(self):
+        self.activity(gross_value='100', cash_status='paid', account_id='academia')
+        self.activity(kind='expense', gross_value='300', method='individual')
+        self.activity(kind='expense', gross_value='50', method='individual', refund=True)
+        b = self.s.state('2026-10')['budget']
+        self.assertEqual((b['business_expenses'], b['available'], b['deficit']), (25000,0,15000))
+
+    def test_optional_concept_uses_category_course_or_area(self):
+        category = self.s.rows("SELECT id,name FROM categories WHERE area='personal' AND kind='expense'")[0]
+        ident = self.activity(area='personal', kind='expense', description='', category_id=category['id'])
+        self.assertEqual(self.get(ident)['description'], category['name'])
+        ident = self.activity(area='personal', kind='income', description='')
+        self.assertEqual(self.get(ident)['description'], 'Ingreso de Personal')
 
     def test_budget_rejects_duplicate_categories_and_excess(self):
         category = self.s.rows("SELECT id FROM categories WHERE area='personal' AND kind='expense'")[0]['id']
