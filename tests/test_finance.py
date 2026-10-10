@@ -248,5 +248,28 @@ class FinanceTests(unittest.TestCase):
         self.s.import_rows(dict(name='ISO',rows=rows))
         self.assertTrue(self.s.preview_csv(p)['rows'][0]['duplicate'])
 
+    def test_budget_received_not_profit_or_transfers_and_locked_base(self):
+        self.activity(cash_status='paid', account_id='academia', tax_percent='15')
+        self.activity(kind='expense', gross_value='200', cash_status='paid', account_id='academia')
+        self.activity(gross_value='500')  # Pending is not received.
+        category = self.s.rows("SELECT id FROM categories WHERE area='personal' AND kind='expense'")[0]['id']
+        self.assertEqual(self.s.state('2026-10')['budget']['received'], 85000)
+        self.s.save_budget(dict(month='2026-10', allocations=[dict(category_id=category, percent='60')]))
+        self.activity(gross_value='100', cash_status='paid', account_id='academia', tax_percent='0')
+        self.s.save_budget(dict(month='2026-10', allocations=[dict(category_id=category, percent='100')]))
+        self.assertEqual(self.s.state('2026-10')['budget']['saved']['amount'], 85000)
+        self.assertEqual(self.s.state('2026-10')['budget']['received'], 95000)
+        self.s.close()
+        self.s = FinanceStore(self.path)
+        self.assertEqual(self.s.state('2026-10')['budget']['saved']['allocations'][0]['bps'], 10000)
+
+    def test_budget_rejects_duplicate_categories_and_excess(self):
+        category = self.s.rows("SELECT id FROM categories WHERE area='personal' AND kind='expense'")[0]['id']
+        for rows in ([dict(category_id=category, percent='101')],
+                     [dict(category_id=category, percent='40')]*2):
+            with self.assertRaises(ValueError):
+                self.s.save_budget(dict(month='2026-10', allocations=rows))
+        self.assertIsNone(self.s.state('2026-10')['budget']['saved'])
+
 
 if __name__=='__main__':unittest.main()

@@ -1,5 +1,7 @@
 'use strict';
 import {assignImportArea, assignImportCategory} from './import-utils.mjs';
+import {budgetUI} from './budget-ui.mjs';
+import {monthSelect} from './months.mjs';
 import {businessUI} from './business-ui.mjs';
 import {browserMode, downloadFile} from './transport.mjs';
 const $ = (s, root=document) => root.querySelector(s);
@@ -14,8 +16,9 @@ const cloudMode = browserMode && globalThis.misCuentasBrowser.cloud;
 const localDay = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const modeKey = browserMode ? 'miscuentas-mode:' + new URL('.', import.meta.url).pathname + (cloudMode ? ':' + globalThis.misCuentasBrowser.accountId : '') : 'miscuentas-mode';
 const U = {area:'all',page:'summary',mode:localStorage.getItem(modeKey)||'real',month:localDay(today).slice(0,7),data:null,csrf:'',selected:new Set(),csv:null,preview:null};
-const pages = {summary:'Resumen',activity:'Actividad',courses:'Asignaturas',transactions:'Banco',import:'Importar extracto',settlements:'Liquidaciones',settings:'Configuración',ai:'Asistente local'};
+const pages = {summary:'Resumen',activity:'Actividad',courses:'Asignaturas',budget:'Presupuesto',import:'Importar extracto',settings:'Configuración',ai:'Asistente local'};
 if(browserMode) delete pages.ai;
+const Budget=budgetUI({U,$,$$,esc,euro,head,button,api,load,toast});
 const B=businessUI({U,$,$$,esc,euro,number,field,button,head,stat,areaOptions,accountOptions,categoryOptions,opts,openDialog,api,load,render,toast});
 
 async function api(path,p){
@@ -63,12 +66,13 @@ function render(){
  $('#areas').innerHTML=Object.entries(AREAS).map(([a,n])=>`<button class="side-button ${U.area===a?'active':''}" data-area="${a}"><span class="area-dot"></span>${n}</button>`).join('');
  $('#navigation').innerHTML=Object.entries(pages).map(([p,n])=>`<button class="side-button ${U.page===p?'active':''}" data-page="${p}">${n}</button>`).join('');
  $('#breadcrumb').textContent=`${AREAS[U.area]} / ${pages[U.page]}`;
- $('#demo-banner').hidden=U.mode!=='demo';$('#mode').value=U.mode;$('#month').value=U.month;
- const views={summary:B.summary,activity:B.activity,courses:B.courses,settlements:B.settlements,transactions:renderTransactions,import:renderImport,settings:renderSettings,ai:renderAI};
+ $('#demo-banner').hidden=U.mode!=='demo';$('#mode').value=U.mode;$('#month').innerHTML=monthSelect(U.month);
+ const views={budget:Budget.render,summary:B.summary,activity:B.activity,courses:B.courses,settlements:B.settlements,transactions:renderTransactions,import:renderImport,settings:renderSettings,ai:renderAI};
  $('#content').innerHTML=views[U.page]();
- bindContent();B.bind();
+ bindContent();B.bind();Budget.bind();
  if(cloudMode && U.mode==='real' && globalThis.misCuentasBrowser.sync.offline){
   $('#new-tx').disabled=true;
+  $$('#budget-form input,#budget-form select,#budget-form button').forEach(el=>el.disabled=true);
   const allowed=new Set(['backup','export','export-activity','daily-backup','before-restore','failed-change','refresh','demo','close-modal','goto-activity','goto-settlements']);
   $$('[data-action]').filter(b=>!allowed.has(b.dataset.action)).forEach(b=>b.disabled=true);
  }else $('#new-tx').disabled=false;
@@ -86,9 +90,7 @@ function fillTransactions(){
 }
 
 function renderSettings(){
- const accounts=U.data.accounts.filter(a=>U.area==='all'||a.area===U.area);
- return head('Una estructura que se adapta a ti.','Configura cuentas, categorías y reglas. Puedes registrar todos los gastos de socios y profesores.',button('Nueva cuenta','new-account')+button('Nueva categoría','new-category','primary'))+
- `<div class="account-grid">${accounts.map(a=>`<div class="panel"><div class="area-label">${badge(a.area)}${esc(a.name)}</div><div class="account-balance">${euro(balance(a))}</div><div class="sub">${AREAS[a.area]} · saldo a cierre de mes<br>Saldo inicial: ${euro(a.opening)} · ${a.opening_date}</div><div style="margin-top:12px">${button('Configurar','edit-account','compact',`data-id="${a.id}"`)}</div></div>`).join('')}</div>`+
+ return head('Configuración','Categorías, reglas y respaldos.',button('Nueva categoría','new-category','primary'))+
  `<div class="tools-grid"><div class="panel"><div class="panel-head"><div><h2>Categorías</h2><div class="sub">Separadas por área y por ingreso/gasto.</div></div></div>${['academia','baile','personal'].filter(a=>U.area==='all'||a===U.area).map(a=>`<details ${U.area===a?'open':''}><summary>${AREAS[a]} · ${U.data.categories.filter(c=>c.area===a).length} categorías</summary><table><tbody>${U.data.categories.filter(c=>c.area===a).map(c=>`<tr><td>${esc(c.name)}</td><td class="num"><span class="pill">${c.kind==='income'?'Ingreso':'Gasto'}</span></td></tr>`).join('')}</tbody></table></details>`).join('')}</div><div class="panel"><div class="panel-head"><div><h2>Reglas de importación</h2><div class="sub">Se aplican a nuevos CSV del área elegida.</div></div>${button('Nueva','new-rule','compact')}</div>${U.data.rules.length?`<table><tbody>${U.data.rules.map(r=>`<tr><td>Contiene <strong>${esc(r.term)}</strong><div class="sub">${AREAS[r.area]} → ${esc(r.category)}</div></td><td>${button('Eliminar','delete-rule','quiet compact',`data-id="${r.id}"`)}</td></tr>`).join('')}</tbody></table>`:'<p>Crea reglas para comercios habituales. Si hay varias coincidencias, se usa la que contiene el texto más específico.</p>'}</div></div>`+
  `<div class="panel"><div class="panel-head"><div><h2>Tus datos y tus copias</h2><div class="sub">${cloudMode&&U.mode==='real'?'Se guardan al confirmar cada operación. Se conserva una copia previa diaria en la nube.':'Se guardan al confirmar cada operación. Hay una copia diaria al iniciar.'}</div></div><div class="action-row">${button('Descargar respaldo','backup')}${button('Exportar movimientos','export')}</div></div><div class="mono">${esc(U.data.data_path)}</div><p class="small">${cloudMode && U.mode==='real' ? 'Tus cuentas se guardan en Supabase y se comparten con tus dispositivos. Conserva respaldos descargados. Restaurar sustituye la base compartida de todos ellos.' : browserMode ? 'Este navegador guarda tus cuentas; no se sincronizan con otros dispositivos. Borrar los datos del sitio o usar el modo privado puede hacer que las pierdas. Descarga un respaldo y guárdalo en un lugar seguro.' : 'El respaldo contiene todas las cuentas, reglas, porcentajes e historial. La guía LEEME explica cómo restaurarlo. Los archivos locales no están cifrados por la app; utiliza el cifrado del disco y de tus copias.'}</p>${browserMode ? `<div class="action-row">${button('Descargar copia automática','daily-backup')}${button('Copia anterior a restaurar','before-restore')}${cloudMode&&U.mode==='real'?button('Descargar operación no confirmada','failed-change'):''}</div><div class="field restore-field"><label for="restore-file">Restaurar un respaldo en ${U.mode==='real'?'Mis datos':'el ejemplo'}</label><input id="restore-file" type="file" accept=".sqlite3,.sqlite,.db"><small>${cloudMode&&U.mode==='real'?'Sustituye las cuentas compartidas de todos tus dispositivos.':'Sustituye las cuentas de este dispositivo.'} Se conserva una copia previa; no se mezclan las bases.</small></div>${button('Restaurar respaldo','restore','danger')}` : ''}</div>`;
 }
@@ -135,7 +137,7 @@ function renderImport(){
  const select=(id,value)=>`<select id="map-${id}"><option value="">Sin usar</option>${h.map(x=>`<option value="${esc(x)}" ${x===value?'selected':''}>${esc(x)}</option>`).join('')}</select>`;
  html+=`<div class="panel"><div class="step-number">02 / COLUMNAS Y VALORES INICIALES</div><h2>${esc(U.csv.name)}</h2><p>${U.csv.count} filas. El área inicial se puede cambiar en cada fila.</p><div class="form-grid">${field('Cuenta bancaria',`<select id="csv-account">${accountOptions(U.area==='all'?'personal':U.area)}</select>`)}${field('Área inicial',`<select id="csv-area">${areaOptions(U.area==='all'?'personal':U.area)}</select>`)}${field('Fecha',select('date',guess(['fecha','date'])))}${field('Formato de fecha','<select id="csv-date-format"><option value="ymd">Año-mes-día · 2026-09-23 (también con hora)</option><option value="dmy" selected>Día/mes/año · 23/09/2026</option><option value="mdy">Mes/día/año · 09/23/2026</option></select>',false,'Las fechas ISO con o sin hora se reconocen también con las otras opciones.')}${field('Concepto',select('description',guess(['concepto','description','comercio','payee'])))}${field('Importe con signo',select('amount',guess(['importe','amount'])))}${field('Entradas (si no usas importe con signo)',select('inflow',guess(['abono','ingreso','inflow'])))}${field('Salidas (si no usas importe con signo)',select('outflow',guess(['cargo','debito','outflow'])))}${field('Notas',select('notes',guess(['notas','notes'])))}${field('ID bancario único',select('bank_id',guess(['transaction id','id bancario'])))}</div><label class="checkbox"><input id="csv-flip" type="checkbox">Invertir signo del importe</label><div class="form-actions">${button('Previsualizar movimientos','preview-csv','primary')}</div></div>`;
  }
- if(U.preview)html+=`<div class="panel" id="preview-panel"><div class="step-number">03 / CLASIFICAR Y GUARDAR</div><div class="panel-head"><div><h2>Área, categoría y reparto por movimiento</h2><p class="small">Los posibles duplicados están desmarcados. La cuenta bancaria se conserva aunque cambies el área.</p></div><span class="pill" id="import-count"></span></div><div class="inline-note">El importe del CSV es dinero real del banco. Si una factura tiene retención, vincúlalo a la factura ya registrada con su bruto e IRPF. Un registro nuevo importado empieza con retención 0; puedes completar después el bruto y la retención. Los pagos entre tus cuentas se vinculan desde Banco.</div><div class="preview-table"><table><thead><tr><th></th><th>FILA</th><th>FECHA</th><th>CONCEPTO</th><th>IMPORTE</th><th>ÁREA / CATEGORÍA</th><th>REPARTO</th><th>ASIGNATURA</th><th>TRATAMIENTO</th><th>ESTADO</th></tr></thead><tbody id="csv-table-body"></tbody></table></div><div class="action-row"><span id="csv-page" class="sub"></span>${button('Anterior','csv-prev','compact')}${button('Siguiente','csv-next','compact')}</div><div class="form-actions">${button('Importar seleccionados','confirm-import','primary')}</div></div>`;
+ if(U.preview)html+=`<div class="panel" id="preview-panel"><div class="step-number">03 / CLASIFICAR Y GUARDAR</div><div class="panel-head"><div><h2>Área, categoría y reparto por movimiento</h2><p class="small">Los posibles duplicados están desmarcados. La cuenta bancaria se conserva aunque cambies el área.</p></div><span class="pill" id="import-count"></span></div><div class="inline-note">El importe del CSV es dinero real del banco. Si una factura tiene retención, vincúlalo a la factura ya registrada con su bruto e IRPF. Un registro nuevo importado empieza con retención 0; puedes completar después el bruto y la retención. Los traspasos entre tus cuentas no son ingresos nuevos: no los importes como actividad.</div><div class="preview-table"><table><thead><tr><th></th><th>FILA</th><th>FECHA</th><th>CONCEPTO</th><th>IMPORTE</th><th>ÁREA / CATEGORÍA</th><th>REPARTO</th><th>ASIGNATURA</th><th>TRATAMIENTO</th><th>ESTADO</th></tr></thead><tbody id="csv-table-body"></tbody></table></div><div class="action-row"><span id="csv-page" class="sub"></span>${button('Anterior','csv-prev','compact')}${button('Siguiente','csv-next','compact')}</div><div class="form-actions">${button('Importar seleccionados','confirm-import','primary')}</div></div>`;
  html+=`<div class="panel"><h2>Importaciones anteriores</h2><div class="table-wrap"><table><thead><tr><th>ARCHIVO</th><th>FECHA</th><th>ACTIVOS</th><th></th></tr></thead><tbody>${U.data.batches.map(b=>`<tr><td>${esc(b.name)}</td><td>${b.created.slice(0,16).replace('T',' ')}</td><td>${b.count}</td><td>${b.active?button('Deshacer lote','undo-import','quiet compact',`data-id="${b.id}"`):'Anulado'}</td></tr>`).join('')||'<tr><td colspan="4">Sin importaciones.</td></tr>'}</tbody></table></div></div>`;
  return html;
 }
@@ -209,7 +211,7 @@ document.addEventListener('click',async e=>{
   if(act==='new-rule')return ruleDialog();
   if(act==='new-person')return openDialog('Añadir socio o destinatario',field('Nombre','<input name="name" required maxlength="80">',true),'person');
   if(act==='goto-import'){U.page='import';render();return;}
-  if(act==='goto-transactions'){U.page='transactions';render();return;}
+  if(act==='goto-transactions'){U.page='activity';render();return;}
   if(act==='demo'){U.mode='demo';U.csv=null;U.preview=null;localStorage.setItem(modeKey,'demo');await load();return;}
   if(act==='refresh'){b.disabled=true;try{await load();toast('Datos actualizados');}finally{b.disabled=false;}return;}
   if(['backup','export','daily-backup','before-restore','failed-change'].includes(act)){await downloadFile(`/api/${act}?mode=${U.mode}`);return;}

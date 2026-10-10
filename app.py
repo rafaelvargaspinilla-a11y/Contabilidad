@@ -101,7 +101,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if not self.authenticated():
             return self.send_bytes('Abre la aplicación con Abrir.command para iniciar una sesión local.'.encode(), 'text/plain; charset=utf-8', 401)
-        assets = {'/': ('index.html','text/html; charset=utf-8'), '/app.js':('app.js','text/javascript; charset=utf-8'), '/business-ui.mjs':('business-ui.mjs','text/javascript; charset=utf-8'), '/transport.mjs':('transport.mjs','text/javascript; charset=utf-8'), '/import-utils.mjs':('import-utils.mjs','text/javascript; charset=utf-8'), '/style.css':('style.css','text/css; charset=utf-8')}
+        assets = {'/budget-ui.mjs':('budget-ui.mjs','text/javascript; charset=utf-8'), '/months.mjs':('months.mjs','text/javascript; charset=utf-8'), '/': ('index.html','text/html; charset=utf-8'), '/app.js':('app.js','text/javascript; charset=utf-8'), '/business-ui.mjs':('business-ui.mjs','text/javascript; charset=utf-8'), '/transport.mjs':('transport.mjs','text/javascript; charset=utf-8'), '/import-utils.mjs':('import-utils.mjs','text/javascript; charset=utf-8'), '/style.css':('style.css','text/css; charset=utf-8')}
         if url.path in assets:
             name, typ = assets[url.path]
             return self.send_bytes((ROOT/'static'/name).read_bytes(), typ)
@@ -144,7 +144,7 @@ class Handler(BaseHTTPRequestHandler):
                        '/api/person':'add_person', '/api/shares':'save_shares', '/api/rule':'add_rule',
                        '/api/remove-rule':'remove_rule', '/api/csv-preview':'preview_csv', '/api/import':'import_rows',
                        '/api/undo-import':'undo_import', '/api/entry':'save_entry', '/api/course':'save_course',
-                       '/api/preferences':'save_preferences', '/api/cash':'record_cash', '/api/delete-entry':'delete_entry',
+                       '/api/budget':'save_budget', '/api/preferences':'save_preferences', '/api/cash':'record_cash', '/api/delete-entry':'delete_entry',
                        '/api/reconcile':'reconcile', '/api/unlink':'unlink', '/api/external-unpaid':'mark_external_unpaid',
                        '/api/settlement':'settle','/api/delete-settlement':'delete_settlement','/api/classify-bank':'classify_bank'}
             if action in methods:

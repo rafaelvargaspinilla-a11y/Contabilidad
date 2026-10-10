@@ -76,6 +76,26 @@ class BrowserTests(unittest.TestCase):
     def state(self, page, mode='real'):
         return self.request(page, f'/api/state?mode={mode}&month=2026-09')
 
+    def test_budget_ui_month_names_and_saved_comparison(self):
+        page = self.page(390)
+        self.add_income(page, value='1000')
+        page.locator('#month').select_option('2026-10')
+        page.locator('[data-page="budget"]').click()
+        page.locator('[data-action="budget-add"]').click()
+        category = self.state(page)['categories']
+        category = next(c['id'] for c in category if c['area']=='personal' and c['kind']=='expense')
+        page.locator('[data-budget-category="0"]').select_option(category)
+        page.locator('[data-budget-percent="0"]').fill('100')
+        page.locator('#budget-form button[type="submit"]').click()
+        page.get_by_role('heading', name='Presupuesto frente a gasto real').wait_for()
+        self.assertIn('1000,00', page.locator('#content').inner_text())
+        self.assertEqual(page.locator('[data-page="transactions"],[data-page="settlements"]').count(), 0)
+        self.assertIn('Octubre', page.locator('#month option:checked').inner_text())
+        page.reload()
+        page.locator('h1').wait_for(timeout=60000)
+        self.assertEqual(self.request(page, '/api/state?mode=real&month=2026-10')['budget']['saved']['amount'], 100000)
+        self.assertFalse(page.evaluate('document.documentElement.scrollWidth > innerWidth'))
+
     def test_mobile_navigation_form_and_layout(self):
         page = self.page(390)
         for width in (320, 390, 768, 1280):

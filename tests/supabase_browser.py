@@ -134,6 +134,17 @@ class SupabaseBrowserTests(unittest.TestCase):
         page.locator('#content h1').wait_for(timeout=60000)
         return page
 
+    def test_budget_syncs_to_second_device(self):
+        desktop = self.page()
+        self.add_income(desktop)
+        categories = self.state(desktop)['categories']
+        category = next(c['id'] for c in categories if c['area']=='personal' and c['kind']=='expense')
+        self.request(desktop, '/api/budget', {'mode':'real', 'month':'2026-10', 'allocations':[{'category_id':category, 'percent':'100'}]})
+        mobile = self.page(390)
+        budget = self.request(mobile, '/api/state?mode=real&month=2026-10')['budget']['saved']
+        self.assertEqual(budget['amount'], 12345)
+        self.assertEqual(budget['allocations'][0]['bps'], 10000)
+
     def test_same_accounts_on_phone_and_computer_and_separate_user(self):
         desktop = self.page()
         self.add_income(desktop)

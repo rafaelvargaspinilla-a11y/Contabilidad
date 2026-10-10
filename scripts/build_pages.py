@@ -19,7 +19,7 @@ RUNTIME = {
     'pyodide-lock.json': '9c45b916001a750f4102fc287494f3eab215909c7535c626a20db80fd6333e2c',
     'sqlite3-1.0.0-cp312-cp312-pyodide_2024_0_wasm32.whl': '43061928762b03482676a1e11dcef99a003148e59fe914b6a3e41180c382cfc3',
 }
-ASSETS = ('app.js', 'style.css', 'business-ui.mjs', 'import-utils.mjs', 'transport.mjs',
+ASSETS = ('budget-ui.mjs', 'months.mjs', 'app.js', 'style.css', 'business-ui.mjs', 'import-utils.mjs', 'transport.mjs',
           'browser-entry.mjs', 'browser-worker.js', 'manifest.webmanifest', 'icon.svg')
 ASSETS += ('supabase-auth.mjs', 'supabase-rest.js')
 

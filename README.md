@@ -57,3 +57,11 @@ python3 app.py --data-dir /workspace/mis-cuentas-dev-data --no-browser
 Consulta [LEEME.md](LEEME.md) para el funcionamiento contable y [Abrir.command](Abrir.command) para la versión local en macOS. Para compartir cuentas desde el ordenador, utiliza la versión web con Supabase.
 
 Los CSV de `ejemplos/` son ficticios. No subas extractos reales, bases SQLite, respaldos, contraseñas ni claves administrativas al repositorio.
+
+### Presupuesto mensual
+
+En **Presupuesto**, elige el mes que vas a presupuestar. La base es tu parte de los ingresos cobrados el mes anterior, después de retenciones, sin restar gastos de actividad ni personales. Los cobros pendientes y los traspasos internos no se suman. Los registros antiguos pendientes de revisar su reparto tampoco se incluyen hasta confirmarlos en Actividad.
+
+Añade categorías de gasto Personal (o crea otras), reparte sus porcentajes y pulsa **Guardar presupuesto**. Puedes dejar dinero sin asignar, pero no superar el 100 % ni repetir categorías. La cantidad inicial queda fijada al primer guardado; después puedes editar los porcentajes. La tabla compara el presupuesto guardado con los gastos personales del mes de actividad y muestra disponible o exceso. Las categorías sin presupuesto se indican aparte.
+
+El presupuesto se comparte mediante Supabase y se incluye en los respaldos existentes. Esta actualización no requiere ejecutar otro SQL. Banco y Liquidaciones se han ocultado, junto con los saldos bancarios y pendientes del resumen; los registros históricos se conservan.

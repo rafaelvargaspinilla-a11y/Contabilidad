@@ -1,6 +1,7 @@
 """Actividades, reparto económico y conciliación con el registro bancario."""
 import csv
 import io
+import json
 import uuid
 from datetime import date, datetime
 from decimal import Decimal, ROUND_HALF_UP
@@ -93,6 +94,40 @@ class FinanceStore(Store):
             for k,v in values.items():
                 self.db.execute('UPDATE preferences SET value=? WHERE key=?',(str(v),k))
             self.log('preferences',values)
+
+    def budget_state(self, month):
+        previous = (date.fromisoformat(month+'-01').replace(day=1)).toordinal()-1
+        source = date.fromordinal(previous).strftime('%Y-%m')
+        total = 0
+        for e in self.rows("SELECT * FROM entries WHERE active=1 AND review=0 AND kind='income'"):
+            values = entry_values(e)
+            received = sum(r['amount'] for r in self.rows("SELECT l.amount FROM entry_links l JOIN transactions t ON t.id=l.tx_id WHERE l.entry_id=? AND t.active=1 AND substr(t.date,1,7)=?", (e['id'], source)))
+            received += sum(r['amount'] for r in self.rows("SELECT amount FROM external_cash WHERE entry_id=? AND substr(date,1,7)=?", (e['id'], source)))
+            if values['expected']:
+                total += int((Decimal(received)*Decimal(values['my_income']-values['withholding'])/values['expected']).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
+        row = self.db.execute('SELECT value FROM preferences WHERE key=?', ('budget:'+month,)).fetchone()
+        return dict(source=source, received=total, saved=json.loads(row['value']) if row else None)
+
+    def save_budget(self, p):
+        period = month(p.get('month', ''))
+        rows = p.get('allocations')
+        if not isinstance(rows, list) or not 1 <= len(rows) <= 100:
+            raise ValueError('Añade entre 1 y 100 categorías.')
+        allocations = []
+        for r in rows:
+            category = self.db.execute("SELECT id FROM categories WHERE id=? AND area='personal' AND kind='expense'", (r.get('category_id'),)).fetchone()
+            if not category:
+                raise ValueError('Elige categorías de gasto Personal.')
+            allocations.append(dict(category_id=category['id'], bps=percent(r.get('percent', 0))))
+        if len({r['category_id'] for r in allocations}) != len(allocations) or sum(r['bps'] for r in allocations) > 10000:
+            raise ValueError('No repitas categorías ni superes el 100 %.')
+        state = self.budget_state(period)
+        saved = state['saved']
+        amount = saved['amount'] if saved else state['received']
+        budget = dict(amount=amount, source=state['source'], allocations=allocations)
+        with self.db:
+            self.db.execute('INSERT OR REPLACE INTO preferences(key,value) VALUES (?,?)', ('budget:'+period,json.dumps(budget)))
+            self.log('budget', dict(month=period, **budget))
 
     def save_course(self, p):
         name, ownership = clean(p.get('name'),100), p.get('ownership')
@@ -432,6 +467,9 @@ class FinanceStore(Store):
                 e=by_id.get(s['entry_id'])
                 if e and e['holder']!=s['holder']:
                     balances[s['area']]+=s['amount'] if s['holder']=='me' else -s['amount']
+        data['budget']=self.budget_state(selected_month)
+        y, m = map(int, selected_month.split('-'))
+        data['received']=self.budget_state(f'{y+(m==12):04d}-{m%12+1:02d}')['received']
         data['finance']=dict(entries=entries,courses=self.rows('SELECT * FROM courses ORDER BY year DESC,semester,name'),links=links,
                              settlements=settlements,preferences=self.prefs(),summary=summary,balances=balances)
         return data

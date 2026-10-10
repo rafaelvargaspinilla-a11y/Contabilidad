@@ -13,7 +13,7 @@ METHODS = {
     'person': 'add_person', 'shares': 'save_shares', 'rule': 'add_rule',
     'remove-rule': 'remove_rule', 'csv-preview': 'preview_csv', 'import': 'import_rows',
     'undo-import': 'undo_import', 'entry': 'save_entry', 'course': 'save_course',
-    'preferences': 'save_preferences', 'cash': 'record_cash', 'delete-entry': 'delete_entry',
+    'budget': 'save_budget', 'preferences': 'save_preferences', 'cash': 'record_cash', 'delete-entry': 'delete_entry',
     'reconcile': 'reconcile', 'unlink': 'unlink', 'external-unpaid': 'mark_external_unpaid',
     'settlement': 'settle', 'delete-settlement': 'delete_settlement', 'classify-bank': 'classify_bank',
 }
